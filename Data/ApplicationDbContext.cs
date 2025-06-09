@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using StaffManagementN.Models;
 
@@ -13,4 +13,6 @@ public class ApplicationDbContext : IdentityDbContext
     public DbSet<EmployeeModel> Employees { get; set; }
     
     public DbSet<ShiftModel> Shifts { get; set; }
+
+public DbSet<StaffManagementN.Models.EmployeeShiftModel> EmployeeShiftModel { get; set; } = default!;
 }

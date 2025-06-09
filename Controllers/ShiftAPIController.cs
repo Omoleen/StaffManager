@@ -23,37 +23,49 @@ namespace StaffManagementN.Controllers
 
         // GET: api/ShiftAPI
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<ShiftModel>>> GetShifts()
+        public async Task<ActionResult<IEnumerable<ShiftDto>>> GetShifts()
         {
-            return await _context.Shifts.ToListAsync();
+            var shifts = await _context.Shifts.ToListAsync();
+            var shiftDtos = shifts.Select(s => new ShiftDto
+            {
+                ShiftID = s.ShiftID,
+                StartDateTime = s.StartDateTime,
+                EndDateTime = s.EndDateTime
+            }).ToList();
+            return Ok(shiftDtos);
         }
 
         // GET: api/ShiftAPI/5
         [HttpGet("{id}")]
-        public async Task<ActionResult<ShiftModel>> GetShiftModel(int id)
+        public async Task<ActionResult<ShiftDto>> GetShiftModel(int id)
         {
-            var shiftModel = await _context.Shifts.FindAsync(id);
-
-            if (shiftModel == null)
+            var s = await _context.Shifts.FindAsync(id);
+            if (s == null)
             {
                 return NotFound();
             }
-
-            return shiftModel;
+            var dto = new ShiftDto
+            {
+                ShiftID = s.ShiftID,
+                StartDateTime = s.StartDateTime,
+                EndDateTime = s.EndDateTime
+            };
+            return Ok(dto);
         }
 
         // PUT: api/ShiftAPI/5
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         [HttpPut("{id}")]
-        public async Task<IActionResult> PutShiftModel(int id, ShiftModel shiftModel)
+        public async Task<IActionResult> PutShiftModel(int id, UpdateShiftDto dto)
         {
-            if (id != shiftModel.ShiftID)
+            var shiftModel = await _context.Shifts.FindAsync(id);
+            if (shiftModel == null)
             {
-                return BadRequest();
+                return NotFound();
             }
-
+            shiftModel.StartDateTime = dto.StartDateTime;
+            shiftModel.EndDateTime = dto.EndDateTime;
             _context.Entry(shiftModel).State = EntityState.Modified;
-
             try
             {
                 await _context.SaveChangesAsync();
@@ -69,19 +81,28 @@ namespace StaffManagementN.Controllers
                     throw;
                 }
             }
-
             return NoContent();
         }
 
         // POST: api/ShiftAPI
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         [HttpPost]
-        public async Task<ActionResult<ShiftModel>> PostShiftModel(ShiftModel shiftModel)
+        public async Task<ActionResult<ShiftDto>> PostShiftModel(CreateShiftDto dto)
         {
+            var shiftModel = new ShiftModel
+            {
+                StartDateTime = dto.StartDateTime,
+                EndDateTime = dto.EndDateTime
+            };
             _context.Shifts.Add(shiftModel);
             await _context.SaveChangesAsync();
-
-            return CreatedAtAction("GetShiftModel", new { id = shiftModel.ShiftID }, shiftModel);
+            var resultDto = new ShiftDto
+            {
+                ShiftID = shiftModel.ShiftID,
+                StartDateTime = shiftModel.StartDateTime,
+                EndDateTime = shiftModel.EndDateTime
+            };
+            return CreatedAtAction("GetShiftModel", new { id = shiftModel.ShiftID }, resultDto);
         }
 
         // DELETE: api/ShiftAPI/5
