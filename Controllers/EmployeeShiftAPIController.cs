@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using StaffManagementN.Data;
+using StaffManagementN.Interfaces;
 using StaffManagementN.Models;
 
 namespace StaffManagementN.Controllers
@@ -14,25 +15,25 @@ namespace StaffManagementN.Controllers
     [ApiController]
     public class EmployeeShiftAPIController : ControllerBase
     {
-        private readonly ApplicationDbContext _context;
+        private readonly IEmployeeShiftService _employeeShiftService;
 
-        public EmployeeShiftAPIController(ApplicationDbContext context)
+        public EmployeeShiftAPIController(IEmployeeShiftService employeeShiftService)
         {
-            _context = context;
+            _employeeShiftService = employeeShiftService;
         }
 
         // GET: api/EmployeeShiftAPI
         [HttpGet]
         public async Task<ActionResult<IEnumerable<EmployeeShiftModel>>> GetEmployeeShiftModel()
         {
-            return await _context.EmployeeShiftModel.ToListAsync();
+            return Ok(await _employeeShiftService.GetAllEmployeeShiftsAsync());
         }
 
         // GET: api/EmployeeShiftAPI/5
         [HttpGet("{id}")]
         public async Task<ActionResult<EmployeeShiftModel>> GetEmployeeShiftModel(int id)
         {
-            var employeeShiftModel = await _context.EmployeeShiftModel.FindAsync(id);
+            var employeeShiftModel = await _employeeShiftService.GetEmployeeShift(id);
 
             if (employeeShiftModel == null)
             {
@@ -47,27 +48,10 @@ namespace StaffManagementN.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> PutEmployeeShiftModel(int id, EmployeeShiftModel employeeShiftModel)
         {
-            if (id != employeeShiftModel.EmployeeShiftID)
+            var result = await _employeeShiftService.UpdateEmployeeShift(id, employeeShiftModel);
+            if (!result)
             {
                 return BadRequest();
-            }
-
-            _context.Entry(employeeShiftModel).State = EntityState.Modified;
-
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!EmployeeShiftModelExists(id))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
             }
 
             return NoContent();
@@ -78,25 +62,19 @@ namespace StaffManagementN.Controllers
         [HttpPost]
         public async Task<ActionResult<EmployeeShiftModel>> PostEmployeeShiftModel(EmployeeShiftModel employeeShiftModel)
         {
-            _context.EmployeeShiftModel.Add(employeeShiftModel);
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction("GetEmployeeShiftModel", new { id = employeeShiftModel.EmployeeShiftID }, employeeShiftModel);
+            var newModel = await _employeeShiftService.CreateEmployeeShift(employeeShiftModel);
+            return CreatedAtAction("GetEmployeeShiftModel", new { id = newModel.EmployeeShiftID }, newModel);
         }
 
         // DELETE: api/EmployeeShiftAPI/5
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteEmployeeShiftModel(int id)
         {
-            var employeeShiftModel = await _context.EmployeeShiftModel.FindAsync(id);
-            if (employeeShiftModel == null)
+            var result = await _employeeShiftService.DeleteEmployeeShift(id);
+            if (!result)
             {
                 return NotFound();
             }
-
-            _context.EmployeeShiftModel.Remove(employeeShiftModel);
-            await _context.SaveChangesAsync();
-
             return NoContent();
         }
 
@@ -107,13 +85,11 @@ namespace StaffManagementN.Controllers
             if (dto == null || dto.EmployeeID == 0 || dto.ShiftID == 0)
                 return BadRequest("Invalid EmployeeID or ShiftID");
 
-            var exists = await _context.EmployeeShiftModel.AnyAsync(es => es.EmployeeID == dto.EmployeeID && es.ShiftID == dto.ShiftID);
-            if (exists)
+            var result = await _employeeShiftService.LinkEmployeeToShift(dto);
+            if (result == null)
+            {
                 return Conflict("Employee is already linked to this shift.");
-
-            var model = new EmployeeShiftModel { EmployeeID = dto.EmployeeID, ShiftID = dto.ShiftID };
-            _context.EmployeeShiftModel.Add(model);
-            await _context.SaveChangesAsync();
+            }
             return Ok(dto);
         }
 
@@ -121,12 +97,11 @@ namespace StaffManagementN.Controllers
         [HttpDelete("unlink")]
         public async Task<IActionResult> UnlinkEmployeeFromShift([FromQuery] int employeeId, [FromQuery] int shiftId)
         {
-            var link = await _context.EmployeeShiftModel.FirstOrDefaultAsync(es => es.EmployeeID == employeeId && es.ShiftID == shiftId);
-            if (link == null)
+            var result = await _employeeShiftService.UnlinkEmployeeFromShift(employeeId, shiftId);
+            if (!result)
+            {
                 return NotFound("Link not found.");
-
-            _context.EmployeeShiftModel.Remove(link);
-            await _context.SaveChangesAsync();
+            }
             return NoContent();
         }
 
@@ -134,19 +109,7 @@ namespace StaffManagementN.Controllers
         [HttpGet("employees-in-shift/{shiftId}")]
         public async Task<ActionResult<IEnumerable<EmployeeDto>>> GetEmployeesInShift(int shiftId)
         {
-            var employees = await _context.EmployeeShiftModel
-                .Where(es => es.ShiftID == shiftId)
-                .Include(es => es.Employee)
-                .Select(es => es.Employee)
-                .ToListAsync();
-            var employeeDtos = employees.Select(e => new EmployeeDto
-            {
-                EmployeeID = e.EmployeeID,
-                FirstName = e.FirstName,
-                LastName = e.LastName,
-                Email = e.Email,
-                Role = e.Role
-            }).ToList();
+            var employeeDtos = await _employeeShiftService.GetEmployeesInShift(shiftId);
             return Ok(employeeDtos);
         }
 
@@ -154,23 +117,8 @@ namespace StaffManagementN.Controllers
         [HttpGet("shifts-for-employee/{employeeId}")]
         public async Task<ActionResult<IEnumerable<ShiftDto>>> GetShiftsForEmployee(int employeeId)
         {
-            var shifts = await _context.EmployeeShiftModel
-                .Where(es => es.EmployeeID == employeeId)
-                .Include(es => es.Shift)
-                .Select(es => es.Shift)
-                .ToListAsync();
-            var shiftDtos = shifts.Select(s => new ShiftDto
-            {
-                ShiftID = s.ShiftID,
-                StartDateTime = s.StartDateTime,
-                EndDateTime = s.EndDateTime
-            }).ToList();
+            var shiftDtos = await _employeeShiftService.GetShiftsForEmployee(employeeId);
             return Ok(shiftDtos);
-        }
-
-        private bool EmployeeShiftModelExists(int id)
-        {
-            return _context.EmployeeShiftModel.Any(e => e.EmployeeShiftID == id);
         }
     }
 }

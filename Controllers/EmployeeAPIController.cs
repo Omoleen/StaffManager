@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using StaffManagementN.Data;
+using StaffManagementN.Interfaces;
 using StaffManagementN.Models;
 
 namespace StaffManagementN.Controllers
@@ -14,26 +15,18 @@ namespace StaffManagementN.Controllers
     [ApiController]
     public class EmployeeAPIController : ControllerBase
     {
-        private readonly ApplicationDbContext _context;
+        private readonly IEmployeeService _employeeService;
 
-        public EmployeeAPIController(ApplicationDbContext context)
+        public EmployeeAPIController(IEmployeeService employeeService)
         {
-            _context = context;
+            _employeeService = employeeService;
         }
 
         // GET: api/EmployeeAPI
         [HttpGet]
         public async Task<ActionResult<IEnumerable<EmployeeDto>>> GetEmployees()
         {
-            var employees = await _context.Employees.ToListAsync();
-            var employeeDtos = employees.Select(e => new EmployeeDto
-            {
-                EmployeeID = e.EmployeeID,
-                FirstName = e.FirstName,
-                LastName = e.LastName,
-                Email = e.Email,
-                Role = e.Role
-            }).ToList();
+            var employeeDtos = await _employeeService.GetEmployees();
             return Ok(employeeDtos);
         }
 
@@ -41,19 +34,11 @@ namespace StaffManagementN.Controllers
         [HttpGet("{id}")]
         public async Task<ActionResult<EmployeeDto>> GetEmployeeModel(int id)
         {
-            var e = await _context.Employees.FindAsync(id);
-            if (e == null)
+            var dto = await _employeeService.GetEmployee(id);
+            if (dto == null)
             {
                 return NotFound();
             }
-            var dto = new EmployeeDto
-            {
-                EmployeeID = e.EmployeeID,
-                FirstName = e.FirstName,
-                LastName = e.LastName,
-                Email = e.Email,
-                Role = e.Role
-            };
             return Ok(dto);
         }
 
@@ -62,32 +47,10 @@ namespace StaffManagementN.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> PutEmployeeModel(int id, UpdateEmployeeDto dto)
         {
-            var employeeModel = await _context.Employees.FindAsync(id);
-            if (employeeModel == null)
+            var result = await _employeeService.UpdateEmployee(id, dto);
+            if (!result)
             {
                 return NotFound();
-            }
-            employeeModel.FirstName = dto.FirstName;
-            employeeModel.LastName = dto.LastName;
-            employeeModel.Email = dto.Email;
-            employeeModel.Role = dto.Role;
-            employeeModel.HourlyRate = dto.HourlyRate;
-            employeeModel.DateHired = dto.DateHired;
-            _context.Entry(employeeModel).State = EntityState.Modified;
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!EmployeeModelExists(id))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
             }
             return NoContent();
         }
@@ -97,47 +60,20 @@ namespace StaffManagementN.Controllers
         [HttpPost]
         public async Task<ActionResult<EmployeeDto>> PostEmployeeModel(CreateEmployeeDto dto)
         {
-            var employeeModel = new EmployeeModel
-            {
-                FirstName = dto.FirstName,
-                LastName = dto.LastName,
-                Email = dto.Email,
-                Role = dto.Role,
-                HourlyRate = dto.HourlyRate,
-                DateHired = dto.DateHired
-            };
-            _context.Employees.Add(employeeModel);
-            await _context.SaveChangesAsync();
-            var resultDto = new EmployeeDto
-            {
-                EmployeeID = employeeModel.EmployeeID,
-                FirstName = employeeModel.FirstName,
-                LastName = employeeModel.LastName,
-                Email = employeeModel.Email,
-                Role = employeeModel.Role
-            };
-            return CreatedAtAction("GetEmployeeModel", new { id = employeeModel.EmployeeID }, resultDto);
+            var resultDto = await _employeeService.CreateEmployee(dto);
+            return CreatedAtAction("GetEmployeeModel", new { id = resultDto.EmployeeID }, resultDto);
         }
 
         // DELETE: api/EmployeeAPI/5
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteEmployeeModel(int id)
         {
-            var employeeModel = await _context.Employees.FindAsync(id);
-            if (employeeModel == null)
+            var result = await _employeeService.DeleteEmployee(id);
+            if (!result)
             {
                 return NotFound();
             }
-
-            _context.Employees.Remove(employeeModel);
-            await _context.SaveChangesAsync();
-
             return NoContent();
-        }
-
-        private bool EmployeeModelExists(int id)
-        {
-            return _context.Employees.Any(e => e.EmployeeID == id);
         }
     }
 } 

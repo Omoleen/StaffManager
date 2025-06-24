@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using StaffManagementN.Data;
+using StaffManagementN.Interfaces;
 using StaffManagementN.Models;
 
 namespace StaffManagementN.Controllers
@@ -14,24 +15,18 @@ namespace StaffManagementN.Controllers
     [ApiController]
     public class ShiftAPIController : ControllerBase
     {
-        private readonly ApplicationDbContext _context;
+        private readonly IShiftService _shiftService;
 
-        public ShiftAPIController(ApplicationDbContext context)
+        public ShiftAPIController(IShiftService shiftService)
         {
-            _context = context;
+            _shiftService = shiftService;
         }
 
         // GET: api/ShiftAPI
         [HttpGet]
         public async Task<ActionResult<IEnumerable<ShiftDto>>> GetShifts()
         {
-            var shifts = await _context.Shifts.ToListAsync();
-            var shiftDtos = shifts.Select(s => new ShiftDto
-            {
-                ShiftID = s.ShiftID,
-                StartDateTime = s.StartDateTime,
-                EndDateTime = s.EndDateTime
-            }).ToList();
+            var shiftDtos = await _shiftService.GetShifts();
             return Ok(shiftDtos);
         }
 
@@ -39,17 +34,11 @@ namespace StaffManagementN.Controllers
         [HttpGet("{id}")]
         public async Task<ActionResult<ShiftDto>> GetShiftModel(int id)
         {
-            var s = await _context.Shifts.FindAsync(id);
-            if (s == null)
+            var dto = await _shiftService.GetShift(id);
+            if (dto == null)
             {
                 return NotFound();
             }
-            var dto = new ShiftDto
-            {
-                ShiftID = s.ShiftID,
-                StartDateTime = s.StartDateTime,
-                EndDateTime = s.EndDateTime
-            };
             return Ok(dto);
         }
 
@@ -58,28 +47,10 @@ namespace StaffManagementN.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> PutShiftModel(int id, UpdateShiftDto dto)
         {
-            var shiftModel = await _context.Shifts.FindAsync(id);
-            if (shiftModel == null)
+            var result = await _shiftService.UpdateShift(id, dto);
+            if (!result)
             {
                 return NotFound();
-            }
-            shiftModel.StartDateTime = dto.StartDateTime;
-            shiftModel.EndDateTime = dto.EndDateTime;
-            _context.Entry(shiftModel).State = EntityState.Modified;
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!ShiftModelExists(id))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
             }
             return NoContent();
         }
@@ -89,41 +60,20 @@ namespace StaffManagementN.Controllers
         [HttpPost]
         public async Task<ActionResult<ShiftDto>> PostShiftModel(CreateShiftDto dto)
         {
-            var shiftModel = new ShiftModel
-            {
-                StartDateTime = dto.StartDateTime,
-                EndDateTime = dto.EndDateTime
-            };
-            _context.Shifts.Add(shiftModel);
-            await _context.SaveChangesAsync();
-            var resultDto = new ShiftDto
-            {
-                ShiftID = shiftModel.ShiftID,
-                StartDateTime = shiftModel.StartDateTime,
-                EndDateTime = shiftModel.EndDateTime
-            };
-            return CreatedAtAction("GetShiftModel", new { id = shiftModel.ShiftID }, resultDto);
+            var resultDto = await _shiftService.CreateShift(dto);
+            return CreatedAtAction("GetShiftModel", new { id = resultDto.ShiftID }, resultDto);
         }
 
         // DELETE: api/ShiftAPI/5
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteShiftModel(int id)
         {
-            var shiftModel = await _context.Shifts.FindAsync(id);
-            if (shiftModel == null)
+            var result = await _shiftService.DeleteShift(id);
+            if(!result)
             {
                 return NotFound();
             }
-
-            _context.Shifts.Remove(shiftModel);
-            await _context.SaveChangesAsync();
-
             return NoContent();
-        }
-
-        private bool ShiftModelExists(int id)
-        {
-            return _context.Shifts.Any(e => e.ShiftID == id);
         }
     }
 }
